@@ -1,0 +1,16 @@
+{
+  "name": "pg-monitor",
+  "version": "0.0.1",
+  "author": "Marco Nicosia",
+  "dependencies": {
+    "finalhandler": "1.x.x",
+    "pg": "^8.5.1",
+    "mysql": "x",
+    "redis": "3.x.x",
+    "serve-static": "1.10.0",
+    "strftime": "0.8.2"
+  },
+  "engines": {
+    "node": "15.x"
+  }
+}
