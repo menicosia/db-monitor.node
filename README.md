@@ -33,3 +33,11 @@ In a browser, visit the top-level page for a graphical representation of databas
 > docker inspect postgresql | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
 > docker run -d -p 8080:8080 --network=apps -e PG_URI=postgres://postgres:passw0rd@POSTGRES_IP:5432/pmAccept -e REDIS_CREDS=REDIS_IP:6379:passw0rd pg-monitor
 
+### Pushing to a remote registry
+
+> docker image tag pg-monitor:latest gcr.io/data-pcf-db/pg-monitor:latest
+> docker image push gcr.io/data-pcf-db/pg-monitor:latest
+
+If you have another tag, or a different version of the container with the same tag, you may need to:
+> docker rmi --force 1197e8489df7
+
