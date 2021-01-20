@@ -15,20 +15,19 @@ spec:
         app.kubernetes.io/name: pg-monitor
     spec:
       containers:
-      - image: gcr.io/data-pcf-db/pg-monitor:v0.2
+      - image: gcr.io/data-pcf-db/pg-monitor:latest
         name: pg-monitor
         ports:
         - containerPort: 8080
 ---
-apiVersion: apps/v1
+apiVersion: v1
 kind: Service
 metadata:
   name: pg-monitor-entrypoint
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
-    pg-monitor: web
+    app.kubernetes.io/name: pg-monitor
   ports:
   - port: 8080
     targetPort: 8080
-    nodePort: 8080
