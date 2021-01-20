@@ -23,3 +23,13 @@ run `npm start` to begin monitoring
 ###
 
 In a browser, visit the top-level page for a graphical representation of database availability, and enjoy!
+
+
+### Local mode
+
+> docker run -d -p 6379:6379 --network=apps -e REDIS_PASSWORD=passw0rd -e ALLOW_EMPTY_PASSSWORD=no --name redis bitnami/redis:latest
+> docker run -d -p 5432:5432 --network=apps -e POSTGRESQL_DATABASE=pmAccept -e POSTGRESQL_PASSWORD=passw0rd --name postgresql bitnami/postgresql:latest
+> docker inspect redis | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
+> docker inspect postgresql | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
+> docker run -d -p 8080:8080 --network=apps -e PG_URI=postgres://postgres:passw0rd@POSTGRES_IP:5432/pmAccept -e REDIS_CREDS=REDIS_IP:6379:passw0rd pg-monitor
+

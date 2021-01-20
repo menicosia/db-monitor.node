@@ -24,7 +24,8 @@ var mysql_creds = [] ;
 var dbClient = undefined ;
 var dbConnectState = Boolean(false) ;
 
-var connectInterval = undefined ;
+var dbConnectTimer = undefined ;
+var redisConnectTimer = undefined ;
 var pingInterval = undefined ;
 
 // REDIS DOCUMENTATION
@@ -86,6 +87,7 @@ else {
         } else {
             redis_creds = { 'password' : creds[2], 'host' : creds[0], 'port' : creds[1] } ;
             pg_creds["connectionString"] = process.env.PG_URI ;
+            pg_creds["connectionTimeoutMillis"] = 1000 ;
             activateState = true ;
         }
     } else {
@@ -100,19 +102,39 @@ var myInstanceBits = "Instance_" + myIndex + "_Bits" ;
 var myInstanceList = "Instance_" + myIndex + "_List" ;
 
 // Callback functions
-function handleDBConnect(err) {
+
+function handleDBerror(err) {
     if (err) {
-        if (activateState == true) {
-            connectInterval = setTimeout(pgConnect, 1000) ;
+        console.warn("[db] ERROR: Issue with database: " + err.code) ;
+        if (true == activateState) {
+            pgConnect() ;
         }
+    }
+}
+        
+function handleDBend() {
+    console.warn("[db] PG server closed connection.") ;
+    if (true == activateState) {
+        pgConnect() ;
+    }
+}
+
+function handleDBConnect(err) {
+    clearInterval(dbConnectTimer) ;
+    dbConnectTimer = undefined ;
+    if (err) {
         dbConnectState = false ;
-        console.error("Error connecting to DB: " + err.code + "... Will try again in 1s.") ;
+        console.error("[db] ERROR: problem connecting to DB: " + err) ;
+        if (activateState == true) {
+            console.info("[db] Will attempt to reconnect every 1 seconds.") ;
+            dbConnectTimer = setTimeout(pgConnect, 1000) ;
+        }
         recordDBStatus(0) ;
     } else {
-        dbClient.on('error', handleDBConnect) ;
-        console.log("Connected to database. Commencing ping every 1s.") ;
         dbConnectState = true ;
-        clearInterval(connectInterval) ;
+        console.log("[db] Connected to database. Commencing ping every 1s.") ;
+        dbClient.on('error', handleDBerror) ;
+        dbClient.on('end', handleDBend) ;
         pingInterval = setInterval(doPing, 1000) ;
     }
 }
@@ -139,18 +161,18 @@ function handleLastTime(err, res) {
     }
 }
 function handleRedisConnect(message, err) {
+    clearInterval(redisConnectTimer) ;
+    redisConnectTimer = undefined ;
     switch (message) {
     case "error":
         redisConnectionState = false ;
-        console.warn("Redis connection failed: " + err + "\nWill try again in 3s." ) ;
-        setTimeout(RedisConnect, 3000) ;
+        console.error("[redis] ERROR: Redis connection failed: " + err + "\n[redis] Will try again in 3s." ) ;
+        redisConnectTimer = setTimeout(RedisConnect, 3000) ;
         break ;
     case "ready":
         redisConnectionState = true ;
-        redisClient.on("error", function(err) { handleRedisConnect("error", err) }) ;
-        // redisClient.on("ready", function(err) { handleRedisConnect("ready", undefined) }) ;
         redisClient.hget(myInstance, "lastUpdate", handleLastTime) ;
-        console.log("Redis READY.") ;
+        console.log("[redis] READY.") ;
         break ;
     default:
         console.warn("Redis connection result neither error nor ready?!") ;
@@ -194,8 +216,8 @@ function doPing() {
 }
 
 function pgConnect() {
-    if (activateState) {
-        console.log("Attempting to connect to PG...") ;
+    if (true == activateState) {
+        console.log("[db] Attempting to connect to PG...") ;
         dbClient = new pg.Client(pg_creds)
         dbClient.connect(handleDBConnect) ;
     } else {
@@ -214,17 +236,17 @@ function MySQLConnect() {
 }
 
 function RedisConnect() {
-    if (redisClient) { redisClient.end() }
+    if (redisClient) { redisClient.end(true) }
     if (activateState && redis_creds) {
-        console.log("Attempting to connect to redis...") ;
+        console.log("[redis] Attempting to connect to redis...") ;
         if (redis_creds["host"]) {
           redisClient = redis.createClient(redis_creds["port"], redis_creds["host"]) ;
         } else {
           redisClient = redis.createClient(redis_creds["port"], redis_creds["hostname"]) ;
         }
         if (! localMode) { redisClient.auth(redis_creds["password"]) ; }
-        // redisClient.on("error", function(err) { handleRedisConnect("error", err) }) ;
-        redisClient.on("ready", function(err) { handleRedisConnect("ready", undefined) }) ;
+        redisClient.on("error", function(err) { handleRedisConnect("error", err) }) ;
+        redisClient.on("ready", function() { handleRedisConnect("ready", undefined) }) ;
     } else {
         redisClient = undefined ;
         redisConnectionState = false ;
