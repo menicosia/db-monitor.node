@@ -335,7 +335,7 @@ function requestHandler(request, response) {
         if ("query" in requestParts
             && "db_host" in requestParts["query"] && "db_DB" in requestParts["query"]
             && "db_user" in requestParts["query"] && "db_pw" in requestParts["query"]) {
-            console.log("Received DB connection info: " + requestParts["query"]["host"]) ;
+            console.log("Received DB connection info: " + requestParts["query"]["db_host"]) ;
             pg_creds["host"] = requestParts["query"]["db_host"] ;
             pg_creds["database"] = requestParts["query"]["db_DB"] ;
             pg_creds["user"] = requestParts["query"]["db_user"] ;
