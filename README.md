@@ -56,6 +56,7 @@ Deploy this app
 1. `kubectl create -f ./db-monitor-deployment.yaml`
 1. `kubectl expose deployment db-monitor --port=8080 --name=dbmon-http --type=LoadBalancer`
 1. Get the IP address of the db-monitor app, `kubectl get service/dbmon-http`
+  - `kubectl get service/dbmon-http --output='jsonpath={.status.loadBalancer.ingress[].ip}'`
 
 Visit http://IP-ADDRESS:8080/ to see the app.
 
