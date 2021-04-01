@@ -8,6 +8,12 @@ Design:
 
 ## K8s deployments
 
+Deploy a Redis
+1. `helm repo add bitnami https://charts.bitnami.com/bitnami`
+1. `helm install pgmon-redis bitnami/redis`
+1. `kubectl get secret --namespace tsql-demo pgmon-redis -o jsonpath="{.data.redis-password}" | base64 --decode`
+
+Deploy this app
 1. Clone this repo
 1. `docker build --tag db-monitor`
 1. `docker tag db-monitor:latest ${REGISTRY}/db-monitor:latest`
@@ -34,7 +40,7 @@ Design:
             app: db-monitor
         spec:
           containers:
-          - image: harbor.run.haas-502.pez.vmware.com/library/pg-monitor
+          - image: YOUR-REGISTRY-HERE/db-monitor
             imagePullPolicy: Always
             name: db-monitor
             env:
@@ -48,8 +54,10 @@ Design:
               value: "10.100.200.207:6379:*****"
     ```
 1. `kubectl create -f ./db-monitor-deployment.yaml`
+1. `kubectl expose deployment db-monitor --port=8080 --name=dbmon-http --type=LoadBalancer`
+1. Get the IP address of the db-monitor app, `kubectl get service/dbmon-http`
 
-
+Visit http://IP-ADDRESS:8080/ to see the app.
 
 ## CF Requirements
 - This app could be run on Cloud Foundry. (Possibly broken)
