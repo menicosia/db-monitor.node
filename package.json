@@ -4,8 +4,9 @@
   "author": "Marco Nicosia",
   "dependencies": {
     "finalhandler": "1.x.x",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.2.5",
     "pg": "^8.5.1",
-    "mysql": "x",
     "redis": "3.x.x",
     "serve-static": "1.10.0",
     "strftime": "0.8.2"

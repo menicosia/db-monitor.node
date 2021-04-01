@@ -5,10 +5,12 @@ var http = require('http') ;
 var serveStatic = require('serve-static') ;
 var strftime = require('strftime') ;
 var url = require('url') ;
-var mysql = require('mysql') ;
+// var mysql = require('mysql') ;
+var mysql = require('mysql2') ;
 var pg = require('pg') ;
 var redis = require('redis') ;
 var util = require('util') ;
+var fs = require('fs') ;
 // var bindMySQL = require('./bind-mysql.js') ;
 
 // CONFIGURE THESE
@@ -78,21 +80,31 @@ else { var port = 8080 ; }
 if (process.env.CF_INSTANCE_INDEX) { var myIndex = JSON.parse(process.env.CF_INSTANCE_INDEX) ; }
 else {
     myIndex = 0 ;
-    console.log("CF not detected, checking ENV for PG_URI") ;
-    if (process.env.PG_URI && process.env.REDIS_CREDS) {
+    console.log("CF not detected, checking ENV for REDIS_CREDS and either PG_URI or MYSQL_URI") ;
+    if (process.env.PG_URI) {
+        console.debug("[DB] Configuring for Postgres...") ;
+        pg_creds["connectionString"] = process.env.PG_URI ;
+        pg_creds["connectionTimeoutMillis"] = 1000 ;
+        activateState = 'pg' ;
+    } else if (process.env.MYSQL_HOST) {
+        console.debug("[DB] Configuring for MySQL...") ;
+        mysql_creds["host"] = process.env.MYSQL_HOST ;
+        mysql_creds["user"] = process.env.MYSQL_USER ;
+        mysql_creds["password"] = process.env.MYSQL_PW ;
+        mysql_creds["ssl"] = { "rejectUnauthorized" : false } ;
+        activateState = "my" ;
+    }
+    if (process.env.REDIS_CREDS) {
         creds = process.env.REDIS_CREDS.split(":") ;
         if (3 != creds.length) {
             console.error("[ERROR] REDIS_CREDS environment variable must be colon separated host:port:password") ;
             process.exit(1) ;
         } else {
             redis_creds = { 'password' : creds[2], 'host' : creds[0], 'port' : creds[1] } ;
-            pg_creds["connectionString"] = process.env.PG_URI ;
-            pg_creds["connectionTimeoutMillis"] = 1000 ;
-            activateState = true ;
         }
     } else {
-        console.log("No PG_URI or REDIS_CREDS, will run in passive mode till configured; see /config endpoint.") ;
-        activateState = false ;
+        console.log("No REDIS_CREDS, will run in passive mode till configured; see /config endpoint.") ;
+        activateState = Boolean(false) ;
     }
 }
 
@@ -105,47 +117,55 @@ var myInstanceList = "Instance_" + myIndex + "_List" ;
 
 function handleDBerror(err) {
     if (err) {
-        console.warn("[db] ERROR: Issue with database: " + err.code) ;
-        if (true == activateState) {
-            pgConnect() ;
+        console.warn("[DB] ERROR: Issue with database: " + err.code) ;
+        if (dbConnectTimer) {
+            clearInterval(dbConnectTimer) ;
+            dbConnectTimer = undefined ;
+        }
+        dbConnectState = false ;
+        if (activateState) {
+            console.info("[DB] Will attempt to reconnect every 1 seconds.") ;
+            dbConnectTimer = setTimeout(dbConnect, 1000) ;
         }
     }
 }
         
 function handleDBend() {
-    console.warn("[db] PG server closed connection.") ;
-    if (true == activateState) {
-        pgConnect() ;
+    console.warn("[DB] server closed connection.") ;
+    if (activateState) {
+        dbConnect() ;
     }
 }
 
 function handleDBConnect(err) {
-    clearInterval(dbConnectTimer) ;
-    dbConnectTimer = undefined ;
     if (err) {
-        dbConnectState = false ;
-        console.error("[db] ERROR: problem connecting to DB: " + err) ;
-        if (activateState == true) {
-            console.info("[db] Will attempt to reconnect every 1 seconds.") ;
-            dbConnectTimer = setTimeout(pgConnect, 1000) ;
-        }
+        handleDBerror(err) ;
         recordDBStatus(0) ;
     } else {
         dbConnectState = true ;
-        console.log("[db] Connected to database. Commencing ping every 1s.") ;
-        dbClient.on('error', handleDBerror) ;
-        dbClient.on('end', handleDBend) ;
+        // stop trying to reconnect
+        if (dbConnectTimer) {
+            clearInterval(dbConnectTimer) ;
+            dbConnectTimer = undefined ;
+        }
+        dbClient.on('error', (err) => handleDBerror(err)) ;
+        // dbClient.on('end', handleDBend) ;
+        console.log("[DB] Connected to database. Commencing ping every 1s.") ;
         pingInterval = setInterval(doPing, 1000) ;
     }
 }
 
 function handleDBping(err) {
     if (err) {
-        console.error('Postgres connection error: ' + err) ;
+        console.error('[DB] connection error: ' + err) ;
         recordDBStatus(0) ;
-        dbClient.end() ;
+        if ('pg' == activateState) {
+            dbClient.end() ;
+        } else if ('my' == activateState) {
+            dbClient.destroy() ;
+        }
         clearInterval(pingInterval) ;
-        pgConnect() ;
+        dbConnect() ;
     } else {
         console.log("[" + myIndex + "] Server responded to ping.") ;
         recordDBStatus(1) ;
@@ -212,29 +232,38 @@ function recordDBStatus(bool) {
 }
 
 function doPing() {
-    dbClient.query("select null", handleDBping) ;
+    if ('pg' == activateState) {
+        dbClient.query("select null", handleDBping) ;
+    }
+    if ('my' == activateState) {
+        dbClient.ping(handleDBping) ;
+    }
 }
 
 function pgConnect() {
-    if (true == activateState) {
-        console.log("[db] Attempting to connect to PG...") ;
-        dbClient = new pg.Client(pg_creds)
-        dbClient.connect(handleDBConnect) ;
-    } else {
-        dbClient = undefined ;
-    }
+    console.log("[DB] Attempting to connect to Postgres...") ;
+    dbClient = new pg.Client(pg_creds)
+    dbClient.connect(handleDBConnect) ;
 }
 
 function MySQLConnect() {
-    if (activateState) {
-        dbClient = mysql.createConnection(mysql_creds["uri"])
-        dbClient.connect(handleDBConnect) ;
-        // dbClient.on('error', handleDBConnect) ;
-    } else {
-        dbClient = undefined ;
-    }
+    console.log("[DB] Attempting to connect to MySQL...") ;
+    dbClient = mysql.createConnection(mysql_creds) ;
+    dbClient.connect(handleDBConnect) ;
+    // dbClient.on('error', handleDBConnect) ;
 }
 
+function dbConnect() {
+    if (Boolean(false) == activateState) {
+    }
+    if ('pg' == activateState) {
+        pgConnect() ;
+    } else if ('my' == activateState) {
+        MySQLConnect() ;
+    } else {
+        handleDBConnect( { "code" : "Not configured to talk with database. Will retry." } ) ;
+    }
+}
 function RedisConnect() {
     if (redisClient) { redisClient.end(true) }
     if (activateState && redis_creds) {
@@ -375,7 +404,7 @@ monitorServer.listen(port) ;
 
 if (activateState) {
     console.log("Connecting to database...") ;
-    pgConnect() ;
+    dbConnect() ;
     console.log("Connecting to Redis...") ;
     RedisConnect() ;
 }
