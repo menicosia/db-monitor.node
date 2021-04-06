@@ -8,14 +8,8 @@ module.exports.getMySQLCreds = function(service) {
             service = "p-mysql" ;
         }
     } else {
-        console.log("No VCAP_SERVICES in environment; using localhost") ;
-        service = "local" ;
-        mysql_creds["host"] = "localhost" ;
-        mysql_creds["user"] = "root" ;
-        mysql_creds["password"] = "" ;
-        mysql_creds["database"] = "service_instance_db" ;
-        mysql_creds["ca_certificate"] = undefined ;
-        return(mysql_creds) ;
+        console.error("[getMySQLCreds] No VCAP_SERVICES in environment") ;
+        process.exit(10) ;
     }
 
     mysql_creds["host"] = vcap_services[service][0]["credentials"]["hostname"] ;
