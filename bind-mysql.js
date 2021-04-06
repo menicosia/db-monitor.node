@@ -9,7 +9,7 @@ module.exports.getMySQLCreds = function(service) {
         }
     } else {
         console.error("[getMySQLCreds] No VCAP_SERVICES in environment") ;
-        process.exit(10) ;
+        return(undefined) ;
     }
 
     mysql_creds["host"] = vcap_services[service][0]["credentials"]["hostname"] ;
