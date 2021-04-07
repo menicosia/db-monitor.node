@@ -17,47 +17,11 @@ Deploy this app
 1. Clone this repo
 1. `docker build --tag db-monitor`
 1. `docker tag db-monitor:latest ${REGISTRY}/db-monitor:latest`
-1. `docker push ${REGISTRY}/db-monitor:latest
-1. Create a file to describe the deployment:
-    ```yaml
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      labels:
-        app: db-monitor
-      name: db-monitor
-    spec:
-      replicas: 1
-      selector:
-        matchLabels:
-          app: db-monitor
-      strategy:
-        type: RollingUpdate
-      template:
-        metadata:
-          labels:
-            app: db-monitor
-        spec:
-          containers:
-          - image: YOUR-REGISTRY-HERE/db-monitor
-            imagePullPolicy: Always
-            name: db-monitor
-            env:
-            - name: DB_HOST
-              value: "10.100.200.106"
-            - name: DB_PASSWORD
-              value: "*****"
-            - name: DB_USER
-              value: "bn_wordpress"
-            - name: DB_DATABASE
-              value: "schema-name"
-            - name: REDIS_CREDS
-              value: "10.100.200.207:6379:*****"
-    ```
-1. `kubectl create -f ./db-monitor-deployment.yaml`
-1. `kubectl expose deployment db-monitor --port=8080 --name=dbmon-http --type=LoadBalancer`
-1. Get the IP address of the db-monitor app, `kubectl get service/dbmon-http`
-  - `kubectl get service/dbmon-http --output='jsonpath={.status.loadBalancer.ingress[].ip}'`
+1. `docker push ${REGISTRY}/db-monitor:latest`
+1. Modify the sample deployment template, [db-monitor-deployment.yaml](db-monitor-deployment.yaml), to describe the deployment.
+1. `kubectl create -f ./db-monitor-deployment-local.yaml`
+1. Get the IP address of the db-monitor app, `kubectl get service/db-monitor-entrypoint`
+  - Fancy: `kubectl get service/db-monitor-entrypoint --output='jsonpath={.status.loadBalancer.ingress[].ip}'`
 
 Visit http://IP-ADDRESS:8080/ to see the app.
 
