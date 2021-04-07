@@ -29,5 +29,19 @@ spec:
           value: "CHANGE_ME"
         - name: DB_USER
           value: "bn_wordpress"
+        - name: DB_DATABASE
+          value: "schema-name"
         - name: REDIS_CREDS
           value: "10.100.200.207:6379:CHANGE_ME"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db-monitor-entrypoint
+spec:
+  type: LoadBalancer
+  selector:
+    app: db-monitor
+  ports:
+  - port: 8080
+    targetPort: 8080
