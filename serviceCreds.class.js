@@ -31,8 +31,7 @@ class dbCreds {
             this.db_creds["host"] = process.env.DB_HOST ;
             this.db_creds["user"] = process.env.DB_USER ;
             this.db_creds["password"] = process.env.DB_PASSWORD ;
-            // Database not needed for this app
-            // this.db_creds["database"] = process.env.DB_DATABASE ;
+            this.db_creds["database"] = process.env.DB_DATABASE ;
             if ("pg" == process.env.DB_TYPE || "postgres" == process.env.DB_TYPE) {
                 console.debug("[dbCreds] Configuring for Postgres...") ;
                 this.db_creds["connectionTimeoutMillis"] = 1000 ;
@@ -40,6 +39,7 @@ class dbCreds {
             } else if ("my" == process.env.DB_TYPE || "mysql" == process.env.DB_TYPE) {
                 console.debug("[dbCreds] Configuring for MySQL...") ;
                 this.db_creds["ssl"] = { "rejectUnauthorized" : false } ;
+                this.db_creds["connectTimeout"] = 1000 ;
                 this.activateState = "my" ;
             }
 
@@ -56,12 +56,12 @@ class dbCreds {
                 } else if ("my" == connect_info["db_type"]) {
                     console.debug("[DB] Configuring for MySQL...") ;
                     this.db_creds["ssl"] = { "rejectUnauthorized" : false } ;
+                    this.db_creds["connectTimeout"] = 1000 ;
                     this.activateState = "my" ;
                 }
                 
                 this.db_creds["host"] = connect_info["db_host"] ;
-                // Database not needed for this app
-                // this.db_creds["database"] = connect_info["db_DB"] ;
+                this.db_creds["database"] = connect_info["db_DB"] ;
                 this.db_creds["user"] = connect_info["db_user"] ;
                 this.db_creds["password"] = connect_info["db_pw"] ;
             }

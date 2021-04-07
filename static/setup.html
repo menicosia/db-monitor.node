@@ -16,25 +16,28 @@
        -H "X-CF-APP-INSTANCE":"APP-ID:0"</code></p>
     <table id="dataTable" border=0>
         <form action="config" method="get">
-          <tr><td>Database:</td>
-            <td><input type="radio" name="db_type" value="pg"><label for="pg">Postgres</label></td>
-            <td><input type="radio" name="db_type" value="my"><label for="my">MySQL</label></td></tr>
+          <tr><td colspan=5>
+            <input type="radio" name="db_type" value="pg"><label for="pg">Postgres</label>
+            <input type="radio" name="db_type" value="my"><label for="my">MySQL</label></td></tr>
           <tr>
-            <th>Host</th><th>User</th><th>Password</th></tr>
+            <th>Host</th><th>Port</th><th>User</th><th>Password</th><th>Database</th></tr>
           <tr>
             <td><input type="text" name="db_host" /></td>
-            <!-- <td><input type="text" name="db_DB" /></td> -->
-            <td><input type="text" name="db_user" /></td>
-            <td><input type="password" name="db_pw" /></td></tr>
-          <tr><td colspan=3>Redis:</td>
+            <td><input type="text" name="db_port" value="3306 or 5432"/></td>
+            <td><input type="text" name="db_user" value="root or pgadmin"/></td>
+            <td><input type="password" name="db_pw" /></td>
+            <td><input type="text" name="db_DB" /></td></tr>
+          <tr><td colspan=5>Redis:</td>
           <tr>
-            <th>Host</th><th>Port</th><th>Password</th></tr>
+            <th>Host</th><th>Port</th><th>&nbsp;</th><th>Password</th><th>&nbsp;</th></tr>
           <tr>
             <td><input type="text" name="redis_host" /></td>
             <td><input type="text" name="redis_port" /></td>
-            <td><input type="password" name="redis_pw" /></td></tr>
+            <td>&nbsp;</td>
+            <td><input type="password" name="redis_pw" /></td>
+            <td>&nbsp;</td></tr>
           <tr>
-            <td colspan=3><button type="submit">Connect</button></td></tr>
+            <td colspan=5><button type="submit">Connect</button></td></tr>
         </form>
     </table>
   </body>

@@ -49,6 +49,8 @@ Deploy this app
               value: "*****"
             - name: DB_USER
               value: "bn_wordpress"
+            - name: DB_DATABASE
+              value: "schema-name"
             - name: REDIS_CREDS
               value: "10.100.200.207:6379:*****"
     ```
