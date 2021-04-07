@@ -1,0 +1,16 @@
+#flex-box {
+    float: left ;
+    padding: 5px ;
+    width: 100% ;
+}
+
+.left-item {
+    float: left ;
+    width: 70% ;
+    padding: 5px ;
+}
+.right-item {
+    float: left ;
+    width: 20% ;
+    padding: 5px ;
+}
