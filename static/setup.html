@@ -1,28 +1,32 @@
 <html>
   <head>
     <base href="/">
-    <title>Postgres Monitor Setup</title>
+    <title>Database Monitor Setup</title>
+    <link rel=stylesheet href="tables.css">
+    <link rel=stylesheet href="page.css">
   </head>
   <body>
-    <h1>Postgres Monitor Setup</h1>
+    <h1>Database Monitor Setup</h1>
     <p>Use this page to kick off this instance's connection to a
       database. This can also be accessed via curl using
       the <i>/config</i> endpoint.</p>
     <p>Example:<br>
        <code>curl
-       "http://direct-read.apps.lightsilver.cf-app.com/config?db_IP=10.0.4.12&db_DB=default_schema&db_user=EDbUGzVtQ0m93JZw&db_password=REDACTED&redis_IP=10.0.4.13&redis_port=8000&redis_pw=REDACTED"
-       -H "X-CF-APP-INSTANCE":"446fbd81-363b-4cb6-a039-78ac24d208db:0"</code></p>
+       "http://APP-IP:8080/config?db_host=10.0.4.12&db_user=EDbUGzVtQ0m93JZw&db_pw=REDACTED&redis_IP=10.0.4.13&redis_port=8000&redis_pw=REDACTED"
+       -H "X-CF-APP-INSTANCE":"APP-ID:0"</code></p>
     <table id="dataTable" border=0>
         <form action="config" method="get">
-          <tr><td>Database:<td></tr>
+          <tr><td>Database:</td>
+            <td><input type="radio" name="db_type" value="pg"><label for="pg">Postgres</label></td>
+            <td><input type="radio" name="db_type" value="my"><label for="my">MySQL</label></td></tr>
           <tr>
-            <th>Host</th><th>DB</th><th>User</th><th>Password</th></tr>
+            <th>Host</th><th>User</th><th>Password</th></tr>
           <tr>
             <td><input type="text" name="db_host" /></td>
-            <td><input type="text" name="db_DB" /></td>
+            <!-- <td><input type="text" name="db_DB" /></td> -->
             <td><input type="text" name="db_user" /></td>
             <td><input type="password" name="db_pw" /></td></tr>
-          <tr><td>Redis:</td>
+          <tr><td colspan=3>Redis:</td>
           <tr>
             <th>Host</th><th>Port</th><th>Password</th></tr>
           <tr>
@@ -30,7 +34,7 @@
             <td><input type="text" name="redis_port" /></td>
             <td><input type="password" name="redis_pw" /></td></tr>
           <tr>
-            <td><button type="submit">Connect</button></td></tr>
+            <td colspan=3><button type="submit">Connect</button></td></tr>
         </form>
     </table>
   </body>
