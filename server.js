@@ -77,21 +77,20 @@ var myInstanceList = "Instance_" + myIndex + "_List" ;
 function handleDBerror(err) {
     if (err) {
         console.warn("[DB] ERROR: Issue with database: " + err.code) ;
-        // clear any duplicate reconnect activity
-        if (dbConnectTimer) {
-            clearInterval(dbConnectTimer) ;
-            dbConnectTimer = undefined ;
-        }
-        dbConnectState = false ;
-        if (db_creds.activateState) {
-            console.info("[DB] Will attempt to reconnect every 1 seconds.") ;
-            dbConnectTimer = setTimeout(dbConnect, 1000) ;
-        }
+    } else {
+        console.warn("[DB] ERROR: Unspecified issue with database.") ;
+    }
+    dbConnectState = Boolean(false) ;
+    if (db_creds.activateState && ! dbConnectTimer) {
+        console.info("[DB] Will attempt to reconnect every 1 seconds.") ;
+        dbConnectTimer = setInterval(dbConnect, 1000) ;
+    } else {
+        console.info("Connect timer is set, expecting it to re-try.") ;
     }
 }
         
 function handleDBend() {
-    console.warn("[DB] server closed connection.") ;
+    console.warn("[DB] server closed connection. Will attempt to reconnect") ;
     if (db_creds.activateState) {
         dbConnect() ;
     }
@@ -114,7 +113,7 @@ function handleDBConnect(err) {
             dbConnectTimer = undefined ;
         }
         dbClient.on('error', (err) => handleDBerror(err)) ;
-        // dbClient.on('end', handleDBend) ;
+        dbClient.on('end', handleDBend) ;
         console.log("[DB] Connected to database. Commencing ping every 1s.") ;
         pingInterval = setInterval(doPing, 1000) ;
     }
@@ -122,7 +121,7 @@ function handleDBConnect(err) {
 
 function handleDBping(err) {
     if (err) {
-        console.error('[DB] connection error: ' + err) ;
+        console.error('[DB] ping error: ' + err) ;
         recordDBStatus(0) ;
         if ('pg' == db_creds.activateState) {
             dbConnectState = Boolean(false) ;
@@ -131,8 +130,6 @@ function handleDBping(err) {
             dbConnectState = Boolean(false) ;
             dbClient.destroy() ;
         }
-        // dbConnect should be handled by handleDBerror
-        // dbConnect() ;
     } else {
         console.log("[" + myIndex + "] Server responded to ping.") ;
         recordDBStatus(1) ;
