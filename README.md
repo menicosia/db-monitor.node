@@ -10,8 +10,8 @@ Design:
 
 Deploy a Redis
 1. `helm repo add bitnami https://charts.bitnami.com/bitnami`
-1. `helm install pgmon-redis bitnami/redis`
-1. `kubectl get secret --namespace tsql-demo pgmon-redis -o jsonpath="{.data.redis-password}" | base64 --decode`
+1. `helm install dbmon-redis bitnami/redis`
+1. `kubectl get secret --namespace tsql-demo dbmon-redis -o jsonpath="{.data.redis-password}" | base64 --decode`
 
 Deploy this app
 1. Clone this repo
@@ -31,20 +31,6 @@ Visit http://IP-ADDRESS:8080/ to see the app.
 - Included `manifest.yml` assumes the app has been bound to service instances `mysql-monitor-db` and `mysql-monitor-redis`.
 
 ## Local Usage
-Provide environment variables "MYSQL_URL" and "REDIS_CREDS"
-
-Examples:
-- export REDIS_CREDS="127.0.0.1:6379:" (indicates blank password)
-- export MYSQL_URI="mysql://root:password@127.0.0.1/foobar?reconnect=true"
-
-run `npm start` to begin monitoring
-
-###
-
-In a browser, visit the top-level page for a graphical representation of database availability, and enjoy!
-
-
-### Local mode
 
 To run locally, spin up a database and a redis container:
 
@@ -60,15 +46,5 @@ Get the IP addresses of your containers and run the app:
 ```sh
 $ docker inspect redis | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
 $ docker inspect DATABASE | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
-$ docker run -d -p 8080:8080 --network=apps -e DB=DATABASE_CHOICE -e DB_HOST=IP_ADDRESS -e DB_USER={postgres,root} -e DB_PASSWORD=passw0rd -e REDIS_CREDS=REDIS_IP:6379:passw0rd pg-monitor
+$ docker run -d -p 8080:8080 --network=apps -e DB=DATABASE_CHOICE -e DB_HOST=IP_ADDRESS -e DB_USER={postgres,root} -e DB_PASSWORD=passw0rd DB_DATABASE -e REDIS_CREDS=REDIS_IP:6379:passw0rd db-monitor
 ```
-
-### Pushing to a remote registry
-
-```sh
-> docker image tag pg-monitor:latest gcr.io/data-pcf-db/pg-monitor:latest
-> docker image push gcr.io/data-pcf-db/pg-monitor:latest
-```
-
-If you have another tag, or a different version of the container with the same tag, you may need to:
-> docker rmi --force 1197e8489df7
