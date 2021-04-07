@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: db-monitor
+  name: db-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db-monitor
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: db-monitor
+    spec:
+      containers:
+      - image: CHANGE_ME
+        imagePullPolicy: Always
+        name: db-monitor
+        env:
+        - name: DB_TYPE
+          value: my
+        - name: DB_HOST
+          value: "10.100.200.194"
+        - name: DB_PASSWORD
+          value: "CHANGE_ME"
+        - name: DB_USER
+          value: "bn_wordpress"
+        - name: REDIS_CREDS
+          value: "10.100.200.207:6379:CHANGE_ME"
