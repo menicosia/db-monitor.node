@@ -5,24 +5,22 @@ var http = require('http') ;
 var serveStatic = require('serve-static') ;
 var strftime = require('strftime') ;
 var url = require('url') ;
-// var mysql = require('mysql') ;
 var mysql = require('mysql2') ;
 var pg = require('pg') ;
 var redis = require('redis') ;
 var util = require('util') ;
 var fs = require('fs') ;
-// var bindMySQL = require('./bind-mysql.js') ;
+var serviceCreds = require('./serviceCreds.class.js') ;
 
 // CONFIGURE THESE
 var numSecondsStore = 600 // Default 10 minutes
 
 // Variables
 var data = "" ;
-var activateState = Boolean(false) ;
+// var activateState = Boolean(false) ;
 var localMode = Boolean(false) ;
 var vcap_services = undefined ;
-var pg_creds = [] ;
-var mysql_creds = [] ;
+var db_creds = new serviceCreds.dbCreds() ;
 var dbClient = undefined ;
 var dbConnectState = Boolean(false) ;
 
@@ -41,71 +39,32 @@ var pingInterval = undefined ;
 // Instance_0_Hash lastKeyUpdated 0-599 lastUpdate SECS
 // Instance_0_List ...
 
-var redis_creds = [] ;
+var redis_creds = new serviceCreds.redisCreds() ;
 var redisClient = undefined ;
 var redisConnectionState = Boolean(false) ;
 
 var lastUpdate ;
 
-// Setup based on Environment Variables
-// if (process.env.VCAP_SERVICES) {
-//     vcap_services = JSON.parse(process.env.VCAP_SERVICES) ;
-
-//     mysql_creds = bindMySQL.getMySQLCreds() ;
-//     if (mysql_creds) {
-//         activateState = true ;
-//     } else {
-//         console.log("No VCAP_SERVICES mysql bindings. Will attempt to connect via 'MYSQL_URI'")
-//     }
-
-//     if (vcap_services['redis']) {
-//         redis_credentials = vcap_services["redis"][0]["credentials"] ;
-//         console.log("Got access credentials to redis: " + redis_credentials["host"]
-//                  + ":" + redis_credentials["port"]) ;
-//     } else if (vcap_services['rediscloud']) {
-//         redis_credentials = vcap_services["rediscloud"][0]["credentials"] ;
-//         console.log("Got access credentials to redis: " + redis_credentials["hostname"]
-//                  + ":" + redis_credentials["port"]) ;
-//     } else if (vcap_services['p-redis']) {
-//         redis_credentials = vcap_services["p-redis"][0]["credentials"] ;
-//         console.log("Got access credentials to p-redis: " + redis_credentials["host"]
-//                  + ":" + redis_credentials["port"]) ;
-//     } else {
-//         console.log("No VCAP_SERVICES redis bindings. Will attempt to connect via 'REDIS_CREDS'")
-//     }
-// }
-
+// If deployed by Cloud Foundry
 if (process.env.VCAP_APP_PORT) { var port = process.env.VCAP_APP_PORT ;}
 else { var port = 8080 ; }
 if (process.env.CF_INSTANCE_INDEX) { var myIndex = JSON.parse(process.env.CF_INSTANCE_INDEX) ; }
-else {
-    myIndex = 0 ;
-    console.log("CF not detected, checking ENV for REDIS_CREDS and either PG_URI or MYSQL_URI") ;
-    if (process.env.PG_URI) {
-        console.debug("[DB] Configuring for Postgres...") ;
-        pg_creds["connectionString"] = process.env.PG_URI ;
-        pg_creds["connectionTimeoutMillis"] = 1000 ;
-        activateState = 'pg' ;
-    } else if (process.env.MYSQL_HOST) {
-        console.debug("[DB] Configuring for MySQL...") ;
-        mysql_creds["host"] = process.env.MYSQL_HOST ;
-        mysql_creds["user"] = process.env.MYSQL_USER ;
-        mysql_creds["password"] = process.env.MYSQL_PW ;
-        mysql_creds["ssl"] = { "rejectUnauthorized" : false } ;
-        activateState = "my" ;
-    }
-    if (process.env.REDIS_CREDS) {
-        creds = process.env.REDIS_CREDS.split(":") ;
-        if (3 != creds.length) {
-            console.error("[ERROR] REDIS_CREDS environment variable must be colon separated host:port:password") ;
-            process.exit(1) ;
-        } else {
-            redis_creds = { 'password' : creds[2], 'host' : creds[0], 'port' : creds[1] } ;
-        }
+else { var myIndex = 0 ; }
+if (process.env.VCAP_SERVICES) {
+    db_creds.setCreds("cf") ;
+    redis_creds.setCreds("cf") ;
+    if (db_creds) {
+        activateState = 'my' ;
     } else {
-        console.log("No REDIS_CREDS, will run in passive mode till configured; see /config endpoint.") ;
-        activateState = Boolean(false) ;
+        console.error("[ERROR] No VCAP_SERVICES mysql bindings.")
     }
+}
+
+// Setup based on Environment Variables
+if (process.env.DB_TYPE) {
+    console.log("Using environment for Redis and DB configuration...") ;
+    db_creds.setCreds("env") ;
+    redis_creds.setCreds("env") ;
 }
 
 // Here lie the names of the Redis data structures that we'll read/write from
@@ -118,12 +77,13 @@ var myInstanceList = "Instance_" + myIndex + "_List" ;
 function handleDBerror(err) {
     if (err) {
         console.warn("[DB] ERROR: Issue with database: " + err.code) ;
+        // clear any duplicate reconnect activity
         if (dbConnectTimer) {
             clearInterval(dbConnectTimer) ;
             dbConnectTimer = undefined ;
         }
         dbConnectState = false ;
-        if (activateState) {
+        if (db_creds.activateState) {
             console.info("[DB] Will attempt to reconnect every 1 seconds.") ;
             dbConnectTimer = setTimeout(dbConnect, 1000) ;
         }
@@ -132,7 +92,7 @@ function handleDBerror(err) {
         
 function handleDBend() {
     console.warn("[DB] server closed connection.") ;
-    if (activateState) {
+    if (db_creds.activateState) {
         dbConnect() ;
     }
 }
@@ -142,7 +102,12 @@ function handleDBConnect(err) {
         handleDBerror(err) ;
         recordDBStatus(0) ;
     } else {
-        dbConnectState = true ;
+        dbConnectState = Boolean(true) ;
+        // clear any pre-existing ping activity
+        if (pingInterval) {
+            clearInterval(pingInterval) ;
+            pingInterval = undefined ;
+        }
         // stop trying to reconnect
         if (dbConnectTimer) {
             clearInterval(dbConnectTimer) ;
@@ -159,13 +124,15 @@ function handleDBping(err) {
     if (err) {
         console.error('[DB] connection error: ' + err) ;
         recordDBStatus(0) ;
-        if ('pg' == activateState) {
+        if ('pg' == db_creds.activateState) {
+            dbConnectState = Boolean(false) ;
             dbClient.end() ;
-        } else if ('my' == activateState) {
+        } else if ('my' == db_creds.activateState) {
+            dbConnectState = Boolean(false) ;
             dbClient.destroy() ;
         }
-        clearInterval(pingInterval) ;
-        dbConnect() ;
+        // dbConnect should be handled by handleDBerror
+        // dbConnect() ;
     } else {
         console.log("[" + myIndex + "] Server responded to ping.") ;
         recordDBStatus(1) ;
@@ -180,6 +147,7 @@ function handleLastTime(err, res) {
         lastTime = res ;
     }
 }
+
 function handleRedisConnect(message, err) {
     clearInterval(redisConnectTimer) ;
     redisConnectTimer = undefined ;
@@ -232,53 +200,47 @@ function recordDBStatus(bool) {
 }
 
 function doPing() {
-    if ('pg' == activateState) {
+    if ('pg' == db_creds.activateState) {
         dbClient.query("select null", handleDBping) ;
     }
-    if ('my' == activateState) {
+    if ('my' == db_creds.activateState) {
         dbClient.ping(handleDBping) ;
     }
 }
 
 function pgConnect() {
     console.log("[DB] Attempting to connect to Postgres...") ;
-    dbClient = new pg.Client(pg_creds)
+    dbClient = new pg.Client(db_creds.db_creds)
     dbClient.connect(handleDBConnect) ;
 }
 
 function MySQLConnect() {
     console.log("[DB] Attempting to connect to MySQL...") ;
-    dbClient = mysql.createConnection(mysql_creds) ;
+    dbClient = mysql.createConnection(db_creds.db_creds) ;
     dbClient.connect(handleDBConnect) ;
     // dbClient.on('error', handleDBConnect) ;
 }
 
-function dbConnect() {
-    if (Boolean(false) == activateState) {
-    }
-    if ('pg' == activateState) {
+function dbConnect(request) {
+    if ('pg' == db_creds.activateState) {
         pgConnect() ;
-    } else if ('my' == activateState) {
+    } else if ('my' == db_creds.activateState) {
         MySQLConnect() ;
     } else {
-        handleDBConnect( { "code" : "Not configured to talk with database. Will retry." } ) ;
+        handleDBConnect( { "code" : "Not configured to talk with database. Will wait for config." } ) ;
     }
 }
 function RedisConnect() {
     if (redisClient) { redisClient.end(true) }
-    if (activateState && redis_creds) {
+    if (db_creds.activateState && redis_creds) {
         console.log("[redis] Attempting to connect to redis...") ;
-        if (redis_creds["host"]) {
-          redisClient = redis.createClient(redis_creds["port"], redis_creds["host"]) ;
-        } else {
-          redisClient = redis.createClient(redis_creds["port"], redis_creds["hostname"]) ;
-        }
-        if (! localMode) { redisClient.auth(redis_creds["password"]) ; }
+        redisClient = redis.createClient(redis_creds.redis_creds["port"], redis_creds.redis_creds["host"]) ;
+        redisClient.auth(redis_creds.redis_creds["password"]) ;
         redisClient.on("error", function(err) { handleRedisConnect("error", err) }) ;
         redisClient.on("ready", function() { handleRedisConnect("ready", undefined) }) ;
     } else {
         redisClient = undefined ;
-        redisConnectionState = false ;
+        redisConnectionState = Boolean(false) ;
     }
 }
 
@@ -316,17 +278,17 @@ function requestHandler(request, response) {
     console.log("Recieved request for: " + rootCall) ;
     switch (rootCall) {
     case "env":
-	      if (process.env) {
-	          data += "<p>" ;
-		        for (v in process.env) {
-		            data += v + "=" + process.env[v] + "<br>\n" ;
-		        }
-		        data += "<br>\n" ;
-	      } else {
-		        data += "<p> No process env? <br>\n" ;
-	      }
+	if (process.env) {
+	    data += "<p>" ;
+	    for (v in process.env) {
+		data += v + "=" + process.env[v] + "<br>\n" ;
+	    }
+	    data += "<br>\n" ;
+	} else {
+	    data += "<p> No process env? <br>\n" ;
+	}
         response.write(data) ;
-	      break ;
+	break ;
     case "dbstatus":
         data += JSON.stringify({"dbStatus":dbConnectState}) ;
         response.write(data) ;
@@ -350,7 +312,7 @@ function requestHandler(request, response) {
         data += "<h1>MySQL Monitor</h1>\n" ;
         data += "<p>" + strftime("%Y-%m-%d %H:%M") + "<br>\n" ;
         data += "<p>Request was: " + request.url + "<br>\n" ;
-        if (activateState) {
+        if (db_creds.activateState) {
 	          data += "Database connection info: " + mysql_creds["uri"] + "<br>\n" ;
         } else {
             data += "Database info is NOT SET</br>\n" ;
@@ -361,27 +323,21 @@ function requestHandler(request, response) {
         response.write(data) ;
         break ;
     case "config":
-        if ("query" in requestParts
-            && "db_host" in requestParts["query"] && "db_DB" in requestParts["query"]
-            && "db_user" in requestParts["query"] && "db_pw" in requestParts["query"]) {
-            console.log("Received DB connection info: " + requestParts["query"]["db_host"]) ;
-            pg_creds["host"] = requestParts["query"]["db_host"] ;
-            pg_creds["database"] = requestParts["query"]["db_DB"] ;
-            pg_creds["user"] = requestParts["query"]["db_user"] ;
-            pg_creds["password"] = requestParts["query"]["db_pw"] ;
-            redis_creds["host"] = requestParts["query"]["redis_host"] ;
-            redis_creds["user"] = requestParts["query"]["redis_user"] ;
-            redis_creds["password"] = requestParts["query"]["redis_pw"] ;
-            activateState = Boolean(true) ;
-            console.log("Received setup details, attempting to connect to DB and Redis...") ;
-            RedisConnect() ;
-            pgConnect(response) ;
+        if ("query" in requestParts) {
+            db_creds.setCreds("web", requestParts["query"]) ;
+            redis_creds.setCreds("web", requestParts["query"]) ;
             
+            if (db_creds.activateState) {
+                console.log("Received setup details, attempting to connect to DB and Redis...") ;
+                RedisConnect() ;
+                dbConnect() ;
+                response.writeHead(302, {'Location': '/'}) ;
+            }
         } else {
-            response.end("ERROR: Usage: /config?db_host=127.0.0.1&db_DB=mydb&db_user=postgres&db_pw=READCTED&redis_host=127.0.0.1&redis_port=6379&redis_pw=REDACTED "
+            response.write("ERROR: Usage: /config?db_host=127.0.0.1&db_DB=mydb&db_user=postgres&db_pw=READCTED&redis_host=127.0.0.1&redis_port=6379&redis_pw=REDACTED "
                          + "(request: " + request.url  + ")\n") ;
         }
-        return(true) ;
+        break ;
     default:
         console.log("Unknown request: " + request.url) ;
         response.statusCode = 404 ;
@@ -391,6 +347,7 @@ function requestHandler(request, response) {
     }
 
     response.end() ;
+    return(true) ;
 }
 
 // MAIN
@@ -402,7 +359,7 @@ monitorServer = http.createServer(function(req, res) {
 
 monitorServer.listen(port) ;
 
-if (activateState) {
+if (db_creds.activateState) {
     console.log("Connecting to database...") ;
     dbConnect() ;
     console.log("Connecting to Redis...") ;
