@@ -26,7 +26,6 @@ Deploy this app
       labels:
         app: db-monitor
       name: db-monitor
-      namespace: tsql-demo
     spec:
       replicas: 1
       selector:
@@ -44,11 +43,11 @@ Deploy this app
             imagePullPolicy: Always
             name: db-monitor
             env:
-            - name: MYSQL_HOST
+            - name: DB_HOST
               value: "10.100.200.106"
-            - name: MYSQL_PW
+            - name: DB_PASSWORD
               value: "*****"
-            - name: MYSQL_USER
+            - name: DB_USER
               value: "bn_wordpress"
             - name: REDIS_CREDS
               value: "10.100.200.207:6379:*****"
@@ -81,17 +80,29 @@ In a browser, visit the top-level page for a graphical representation of databas
 
 ### Local mode
 
-> docker run -d -p 6379:6379 --network=apps -e REDIS_PASSWORD=passw0rd -e ALLOW_EMPTY_PASSSWORD=no --name redis bitnami/redis:latest
-> docker run -d -p 5432:5432 --network=apps -e POSTGRESQL_DATABASE=pmAccept -e POSTGRESQL_PASSWORD=passw0rd --name postgresql bitnami/postgresql:latest
-> docker inspect redis | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
-> docker inspect postgresql | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
-> docker run -d -p 8080:8080 --network=apps -e PG_URI=postgres://postgres:passw0rd@POSTGRES_IP:5432/pmAccept -e REDIS_CREDS=REDIS_IP:6379:passw0rd pg-monitor
+To run locally, spin up a database and a redis container:
+
+```sh
+$ docker network create apps --driver bridge
+$ docker run -d -p 5432:5432 --name postgresql --network=apps -e POSTGRESQL_PASSWORD=passw0rd bitnami/postgresql:latest
+$ docker run -d -p 3306:3306 --name mysql --network=apps -e MYSQL_ROOT_PASSWORD=passw0rd bitnami/mysql:latest
+$ docker run -d -p 6379:6379 --name redis --network=apps -e REDIS_PASSWORD=passw0rd -e ALLOW_EMPTY_PASSSWORD=no bitnami/redis:latest
+```
+
+Get the IP addresses of your containers and run the app:
+
+```sh
+$ docker inspect redis | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
+$ docker inspect DATABASE | jq -r ".[0].NetworkSettings.Networks.apps.IPAddress"
+$ docker run -d -p 8080:8080 --network=apps -e DB=DATABASE_CHOICE -e DB_HOST=IP_ADDRESS -e DB_USER={postgres,root} -e DB_PASSWORD=passw0rd -e REDIS_CREDS=REDIS_IP:6379:passw0rd pg-monitor
+```
 
 ### Pushing to a remote registry
 
+```sh
 > docker image tag pg-monitor:latest gcr.io/data-pcf-db/pg-monitor:latest
 > docker image push gcr.io/data-pcf-db/pg-monitor:latest
+```
 
 If you have another tag, or a different version of the container with the same tag, you may need to:
 > docker rmi --force 1197e8489df7
-
